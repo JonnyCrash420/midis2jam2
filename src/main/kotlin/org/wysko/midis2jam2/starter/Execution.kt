@@ -21,7 +21,7 @@ import com.jme3.app.SimpleApplication
 import com.jme3.system.AppSettings
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Default
-import org.lwjgl.opengl.Display
+//import org.lwjgl.opengl.Display
 import org.wysko.midis2jam2.DesktopMidis2jam2
 import org.wysko.midis2jam2.gui.ExceptionPanel
 import org.wysko.midis2jam2.gui.getGraphicsSettings
@@ -306,10 +306,10 @@ private class M2J2Execution(
         isPauseOnLostFocus = false
         isShowSettings = false
         /* Calculate center */
-        Display.setLocation(
-            ((screenWidth() - resolution.width) / 2) - 7, // This -7 seems really hacky, but it makes it more centered
-            (screenHeight() - resolution.height) / 2 - 30 // Bias to move it up some
-        )
+//        Display.setLocation(
+//            ((screenWidth() - resolution.width) / 2) - 7, // This -7 seems really hacky, but it makes it more centered
+//            (screenHeight() - resolution.height) / 2 - 30 // Bias to move it up some
+//        )
 
         start()
     }
