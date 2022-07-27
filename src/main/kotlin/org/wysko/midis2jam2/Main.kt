@@ -63,6 +63,9 @@ fun main(args: Array<String>) {
         it.mkdirs()
     }
 
+    /* M1 Chip fix? */
+    org.lwjgl.system.Configuration.GLFW_LIBRARY_NAME.set("glfw_async")
+
     SplashScreen.writeMessage("Loading...")
 
     /* Initialize themes */
