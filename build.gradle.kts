@@ -102,7 +102,8 @@ dependencies {
     if (project.hasProperty("targetplatform")) {
         when (project.properties["targetplatform"]) {
             "windows" -> implementation(compose.desktop.windows_x64)
-            "macos" -> implementation(compose.desktop.macos_x64)
+            "macos", "macos_x64" -> implementation(compose.desktop.macos_x64)
+            "macos_arm64" -> implementation(compose.desktop.macos_arm64)
             "linux" -> implementation(compose.desktop.linux_x64)
             else -> {
                 println("Unknown target platform: ${project.properties["targetplatform"]}, reverting to default")
@@ -130,21 +131,24 @@ dependencies {
 }
 
 tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
-    archiveFileName.set("midis2jam2-${
-        if (project.hasProperty("targetplatform")) {
-            when (project.properties["targetplatform"]) {
-                "windows" -> "windows"
-                "macos" -> "macos"
-                "linux" -> "linux"
-                else -> {
-                    println("Unknown target platform: ${project.properties["targetplatform"]}, reverting to default")
-                    "current"
+    archiveFileName.set(
+        "midis2jam2-${
+            if (project.hasProperty("targetplatform")) {
+                when (project.properties["targetplatform"]) {
+                    "windows" -> "windows"
+                    "macos", "macos_x64" -> "macos_x64"
+                    "macos_arm64" -> "macos_arm64"
+                    "linux" -> "linux"
+                    else -> {
+                        println("Unknown target platform: ${project.properties["targetplatform"]}, reverting to default")
+                        "current"
+                    }
                 }
+            } else {
+                "current"
             }
-        } else {
-            "current"
-        }
-    }-${project.properties["midis2jam2Version"]}.jar")
+        }-${project.properties["midis2jam2Version"]}.jar"
+    )
 }
 
 // Configure dependency licenses
