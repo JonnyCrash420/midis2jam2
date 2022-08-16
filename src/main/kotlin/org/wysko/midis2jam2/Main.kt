@@ -23,7 +23,11 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.res.loadImageBitmap
 import androidx.compose.ui.res.useResource
-import androidx.compose.ui.window.*
+import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPlacement
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
 import com.formdev.flatlaf.FlatDarkLaf
 import com.install4j.api.launcher.SplashScreen
 import org.wysko.midis2jam2.gui.Launcher
@@ -40,8 +44,9 @@ import java.awt.dnd.DnDConstants
 import java.awt.dnd.DropTarget
 import java.awt.dnd.DropTargetDropEvent
 import java.io.File
-import java.util.*
+import java.util.Properties
 import javax.swing.UIManager
+import kotlin.system.exitProcess
 
 /**
  * The configuration directory.
@@ -49,6 +54,7 @@ import javax.swing.UIManager
 const val CONFIGURATION_DIRECTORY: String = ".midis2jam2"
 
 var launcherController: LauncherController? = null
+
 /**
  * Where it all begins.
  */
@@ -78,42 +84,61 @@ fun main(args: Array<String>) {
         }
     }
 
-    application {
-        Window(
-            onCloseRequest = ::exitApplication, title = "midis2jam2 launcher", state = rememberWindowState(
-                placement = WindowPlacement.Maximized, position = WindowPosition(Alignment.Center)
-            ), icon = BitmapPainter(useResource("ico/icon32.png", ::loadImageBitmap))
-        ) {
-            launcherController = Launcher()
-            this.window.contentPane.dropTarget = object : DropTarget() {
-                @Synchronized
-                override fun drop(dtde: DropTargetDropEvent) {
-                    dtde.let {
-                        it.acceptDrop(DnDConstants.ACTION_REFERENCE)
-                        (it.transferable.getTransferData(DataFlavor.javaFileListFlavor) as List<*>).firstOrNull()
-                            ?.let { file -> launcherController?.setSelectedFile?.invoke(file as File) }
+    /* Headless */
+    if (args.any { it == "-d" }) {
+        Execution.start(
+            properties = Properties().apply {
+                setProperty("midi_file", args.first { !it.startsWith("-") })
+                setProperty("midi_device", launcherState.getProperty("midi_device"))
+            },
+            onStart = {},
+            onReady = {},
+            onFinish = {
+                exitProcess(0)
+            }
+        )
+    } else {
+        application {
+            Window(
+                onCloseRequest = ::exitApplication,
+                title = "midis2jam2 launcher",
+                state = rememberWindowState(
+                    placement = WindowPlacement.Maximized,
+                    position = WindowPosition(Alignment.Center)
+                ),
+                icon = BitmapPainter(useResource("ico/icon32.png", ::loadImageBitmap))
+            ) {
+                launcherController = Launcher()
+                this.window.contentPane.dropTarget = object : DropTarget() {
+                    @Synchronized
+                    override fun drop(dtde: DropTargetDropEvent) {
+                        dtde.let {
+                            it.acceptDrop(DnDConstants.ACTION_REFERENCE)
+                            (it.transferable.getTransferData(DataFlavor.javaFileListFlavor) as List<*>).firstOrNull()
+                                ?.let { file -> launcherController?.setSelectedFile?.invoke(file as File) }
+                        }
                     }
                 }
             }
+            if (args.isNotEmpty()) {
+                Execution.start(
+                    properties = Properties().apply {
+                        setProperty("midi_file", args.first())
+                        setProperty("midi_device", launcherState.getProperty("midi_device"))
+                    },
+                    onStart = {
+                        launcherController?.setFreeze?.invoke(true)
+                        MIDISearchFrame.lock()
+                    },
+                    onReady = {},
+                    onFinish = {
+                        launcherController?.setFreeze?.invoke(false)
+                        MIDISearchFrame.unlock()
+                    }
+                )
+            }
+            checkForUpdates() // I'm checking for updates, whether you like it or not.
         }
-        if (args.isNotEmpty()) {
-            Execution.start(
-                properties = Properties().apply {
-                    setProperty("midi_file", args.first())
-                    setProperty("midi_device", launcherState.getProperty("midi_device"))
-                },
-                onStart = {
-                    launcherController?.setFreeze?.invoke(true)
-                    MIDISearchFrame.lock()
-                },
-                onReady = {},
-                onFinish = {
-                    launcherController?.setFreeze?.invoke(false)
-                    MIDISearchFrame.unlock()
-                }
-            )
-        }
-        checkForUpdates() // I'm checking for updates, whether you like it or not.
     }
 }
 
