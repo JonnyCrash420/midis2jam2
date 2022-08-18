@@ -90,12 +90,15 @@ object Execution {
                 this.putAll(properties)
                 this.putAll(loadSettingsFromFile())
             }
+            logger().debug("calling onstart")
             onStart() // Disable launcher
 
             /* Get MIDI file */
 
+            logger().debug("parsing sequence")
             val sequence = try {
                 withContext(Dispatchers.IO) {
+                    logger().debug("dispatched sequence")
                     MidiSystem.getSequence(File(properties.getProperty("midi_file")))
                 }
             } catch (e: InvalidMidiDataException) {
@@ -107,6 +110,7 @@ object Execution {
             }
 
             /* Get MIDI device */
+            logger().debug("getting midi device")
             val midiDevice = try {
                 MidiSystem.getMidiDevice(
                     MidiSystem.getMidiDeviceInfo().first { it.name == properties.getProperty("midi_device") }
@@ -130,10 +134,11 @@ object Execution {
             }
 
             /* Get sequencer */
+            logger().debug("getting sequencer")
             val sequencer = if (properties.getProperty("midi_device") == "Gervill") {
-
                 /* Get internal synth */
                 val synthesizer = try {
+                    logger().debug("getting synthesizer")
                     MidiSystem.getSynthesizer()
                 } catch (e: MidiUnavailableException) {
                     err(
@@ -147,6 +152,7 @@ object Execution {
 
                 /* Open synthesizer */
                 try {
+                    logger().debug("opening synthesizer")
                     synthesizer.open()
                 } catch (e: MidiUnavailableException) {
                     err(
@@ -168,8 +174,10 @@ object Execution {
 
                 /* Get SoundFont */
                 properties.getProperty("soundfont")?.let { sf2 ->
+                    logger().debug("gettting sf2")
                     getUnconnectedSequencer().also {
                         try {
+                            logger().debug("connecting receiver")
                             it.transmitter.receiver = synthesizer.receiver
                             synthesizer.loadAllInstruments(MidiSystem.getSoundbank(File(sf2)))
                         } catch (e: InvalidMidiDataException) {
@@ -184,11 +192,13 @@ object Execution {
                         }
                     }
                 } ?: let {
+                    logger().debug("no sf2")
                     loadSequencerJob.join()
                     connectedSequencer
                 }
             } else {
                 try {
+                    logger().debug("opening midi device")
                     midiDevice.open()
                 } catch (e: MidiUnavailableException) {
                     err(
@@ -207,11 +217,13 @@ object Execution {
                     )
                     return@launch
                 }
+                logger().debug("getting sequencer 2")
                 MidiSystem.getSequencer(false).also {
                     it.transmitter.receiver = midiDevice.receiver
                 }
             }.also {
                 try {
+                    logger().debug("opening sequencer")
                     it.open()
                 } catch (e: MidiUnavailableException) {
 
@@ -234,11 +246,14 @@ object Execution {
                 it.sequence = sequence
             }
 
+            logger().debug("jme3 log setting")
             /* Hush JME */
             Logger.getLogger("com.jme3").level = Level.FINEST
 
+            logger().debug("calling onReady")
             onReady()
 
+            logger().debug("applying graphics")
             /* Apply graphics configuration */
             with(getGraphicsSettings()) {
                 stringPropertyNames().forEach {
@@ -262,8 +277,8 @@ object Execution {
 
 /** Handles an error. */
 fun err(exception: Exception, message: String, title: String, onFinish: () -> Unit = {}) {
-    JOptionPane.showMessageDialog(null, ExceptionPanel(message, exception), title, JOptionPane.ERROR_MESSAGE)
     Execution.logger().error(message, exception)
+    JOptionPane.showMessageDialog(null, ExceptionPanel(message, exception), title, JOptionPane.ERROR_MESSAGE)
     onFinish.invoke()
 }
 
