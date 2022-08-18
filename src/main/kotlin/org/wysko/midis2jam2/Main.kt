@@ -61,21 +61,26 @@ var launcherController: LauncherController? = null
 @ExperimentalComposeUiApi
 @ExperimentalFoundationApi
 fun main(args: Array<String>) {
+    Main.logger().debug("loading sequencer")
     /* Get the default sequencer loaded in a coroutine now since it takes a while (about 1.5 seconds) to load. */
     loadSequencerJob.start()
 
+    Main.logger().debug("making dirs")
     /* Ensure configuration folders are initialized */
     File(System.getProperty("user.home"), ".midis2jam2").also {
         it.mkdirs()
     }
 
+    Main.logger().debug("setting glfw")
     /* M1 Chip fix? */
-    org.lwjgl.system.Configuration.GLFW_LIBRARY_NAME.set("glfw_async")
+//    org.lwjgl.system.Configuration.GLFW_LIBRARY_NAME.set("glfw_async")
 
+    Main.logger().debug("writing splash message")
     SplashScreen.writeMessage("Loading...")
 
     /* Initialize themes */
     try {
+        Main.logger().debug("setting laf")
         UIManager.setLookAndFeel(FlatDarkLaf())
     } catch (e: Exception) {
         with(Main.logger()) {
@@ -86,18 +91,22 @@ fun main(args: Array<String>) {
 
     /* Headless */
     if (args.any { it == "-d" }) {
+        Main.logger().debug("headless detected!")
         Execution.start(
             properties = Properties().apply {
                 setProperty("midi_file", args.first { !it.startsWith("-") })
                 setProperty("midi_device", launcherState.getProperty("midi_device"))
             },
-            onStart = {},
+            onStart = {
+                Main.logger().debug("execution onStart")
+            },
             onReady = {},
             onFinish = {
                 exitProcess(0)
             }
         )
     } else {
+        Main.logger().debug("headless not detected. loading GUI")
         application {
             Window(
                 onCloseRequest = ::exitApplication,

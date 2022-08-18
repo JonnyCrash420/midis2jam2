@@ -21,7 +21,6 @@ import com.jme3.app.SimpleApplication
 import com.jme3.system.AppSettings
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Default
-//import org.lwjgl.opengl.Display
 import org.wysko.midis2jam2.DesktopMidis2jam2
 import org.wysko.midis2jam2.gui.ExceptionPanel
 import org.wysko.midis2jam2.gui.getGraphicsSettings
@@ -66,7 +65,6 @@ private val DEFAULT_CONFIGURATION = Properties().apply {
     setProperty("latency_fix", "0")
 }
 
-
 /** Starts midis2jam2 with given settings. */
 object Execution {
 
@@ -83,8 +81,10 @@ object Execution {
         onReady: () -> Unit,
         onFinish: () -> Unit,
     ): Job {
+        logger().debug("execution start")
         System.gc()
         return CoroutineScope(Default).launch {
+            logger().debug("coroutine started")
             @Suppress("NAME_SHADOWING") val properties = Properties().apply {
                 this.putAll(DEFAULT_CONFIGURATION)
                 this.putAll(properties)
@@ -106,11 +106,11 @@ object Execution {
                 return@launch
             }
 
-
             /* Get MIDI device */
             val midiDevice = try {
                 MidiSystem.getMidiDevice(
-                    MidiSystem.getMidiDeviceInfo().first { it.name == properties.getProperty("midi_device") })
+                    MidiSystem.getMidiDeviceInfo().first { it.name == properties.getProperty("midi_device") }
+                )
             } catch (e: MidiUnavailableException) {
                 err(
                     e,
@@ -187,7 +187,6 @@ object Execution {
                     loadSequencerJob.join()
                     connectedSequencer
                 }
-
             } else {
                 try {
                     midiDevice.open()
@@ -247,6 +246,8 @@ object Execution {
                 }
             }
 
+            logger().debug("ready to start execution thread!")
+
             Thread({
                 M2J2Execution(properties, {
                     onFinish.invoke()
@@ -289,6 +290,7 @@ private class M2J2Execution(
 ) : SimpleApplication() {
 
     fun execute() {
+        logger().debug("execution execute")
         val resolution = collectWindowResolution(properties)
         if (properties.getProperty("fullscreen") == "true") { // Set resolution to monitor resolution
             defaultSettings.isFullscreen = true
@@ -310,7 +312,7 @@ private class M2J2Execution(
 //            ((screenWidth() - resolution.width) / 2) - 7, // This -7 seems really hacky, but it makes it more centered
 //            (screenHeight() - resolution.height) / 2 - 30 // Bias to move it up some
 //        )
-
+        logger().debug("application starting")
         start()
     }
 
@@ -320,6 +322,7 @@ private class M2J2Execution(
     }
 
     override fun simpleInitApp() {
+        logger().debug("initializing app")
         val midiFile = DesktopMidiFile(File(properties.getProperty("midi_file")))
         DesktopMidis2jam2(
             sequencer = sequencer,
@@ -352,4 +355,3 @@ private fun collectWindowResolution(properties: Properties): Dimension {
         Dimension(group(1).toInt(), group(2).toInt())
     }
 }
-
