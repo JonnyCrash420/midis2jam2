@@ -80,196 +80,202 @@ object Execution {
         onStart: () -> Unit,
         onReady: () -> Unit,
         onFinish: () -> Unit,
-    ): Job {
+    ) {
         logger().debug("execution start")
         System.gc()
-        return CoroutineScope(Default).launch {
-            logger().debug("coroutine started")
-            @Suppress("NAME_SHADOWING") val properties = Properties().apply {
-                this.putAll(DEFAULT_CONFIGURATION)
-                this.putAll(properties)
-                this.putAll(loadSettingsFromFile())
-            }
-            logger().debug("calling onstart")
-            onStart() // Disable launcher
 
-            /* Get MIDI file */
+        logger().debug("config started (used to be coroutine)")
+        @Suppress("NAME_SHADOWING") val properties = Properties().apply {
+            this.putAll(DEFAULT_CONFIGURATION)
+            this.putAll(properties)
+            this.putAll(loadSettingsFromFile())
+        }
+        logger().debug("calling onstart")
+        onStart() // Disable launcher
 
-            logger().debug("parsing sequence")
-            val sequence = try {
-                withContext(Dispatchers.IO) {
-                    logger().debug("dispatched sequence")
-                    MidiSystem.getSequence(File(properties.getProperty("midi_file")))
-                }
-            } catch (e: InvalidMidiDataException) {
-                err(e, "The MIDI file has bad data.", "Error reading MIDI file", onFinish)
-                return@launch
-            } catch (e: IOException) {
-                err(e, "The MIDI file could not be loaded.", "Error reading MIDI file", onFinish)
-                return@launch
-            }
+        /* Get MIDI file */
 
-            /* Get MIDI device */
-            logger().debug("getting midi device")
-            val midiDevice = try {
-                MidiSystem.getMidiDevice(
-                    MidiSystem.getMidiDeviceInfo().first { it.name == properties.getProperty("midi_device") }
-                )
+        logger().debug("parsing sequence")
+        val sequence = try {
+            logger().debug("dispatched sequence")
+            MidiSystem.getSequence(File(properties.getProperty("midi_file")))
+        } catch (e: InvalidMidiDataException) {
+            err(e, "The MIDI file has bad data.", "Error reading MIDI file", onFinish)
+            return
+        } catch (e: IOException) {
+            err(e, "The MIDI file could not be loaded.", "Error reading MIDI file", onFinish)
+            return
+        }
+
+        /* Get MIDI device */
+        logger().debug("getting midi device")
+        val midiDevice = try {
+            MidiSystem.getMidiDevice(
+                MidiSystem.getMidiDeviceInfo().first { it.name == properties.getProperty("midi_device") }
+            )
+        } catch (e: MidiUnavailableException) {
+            err(
+                e,
+                "The \"${properties.getProperty("midi_device")}\" MIDI device is unavailable. Are any other applications using it?",
+                "Error opening MIDI device",
+                onFinish
+            )
+            return
+        } catch (e: IllegalArgumentException) {
+            err(
+                e,
+                "The \"${properties.getProperty("midi_device")}\" MIDI device doesn't currently exist. Did you unplug it?",
+                "Error opening MIDI device",
+                onFinish
+            )
+            return
+        }
+
+        /* Get sequencer */
+        logger().debug("getting sequencer")
+        val sequencer = if (properties.getProperty("midi_device") == "Gervill") {
+            /* Get internal synth */
+            val synthesizer = try {
+                logger().debug("getting synthesizer")
+                MidiSystem.getSynthesizer()
             } catch (e: MidiUnavailableException) {
                 err(
                     e,
-                    "The \"${properties.getProperty("midi_device")}\" MIDI device is unavailable. Are any other applications using it?",
-                    "Error opening MIDI device",
+                    "The internal synthesizer is not available due to resource restrictions, or no synthesizer is installed in the system.",
+                    "Error opening MIDI synthesizer",
                     onFinish
                 )
-                return@launch
-            } catch (e: IllegalArgumentException) {
+                return
+            }
+
+            /* Open synthesizer */
+            try {
+                logger().debug("opening synthesizer")
+                synthesizer.open()
+            } catch (e: MidiUnavailableException) {
                 err(
                     e,
-                    "The \"${properties.getProperty("midi_device")}\" MIDI device doesn't currently exist. Did you unplug it?",
-                    "Error opening MIDI device",
+                    "The MIDI device cannot be opened due to resource restrictions.",
+                    "Error opening MIDI synthesizer",
                     onFinish
                 )
-                return@launch
+                return
+            } catch (e: SecurityException) {
+                err(
+                    e,
+                    "The MIDI device cannot be opened due to security restrictions.",
+                    "Error opening MIDI synthesizer",
+                    onFinish
+                )
+                return
             }
 
-            /* Get sequencer */
-            logger().debug("getting sequencer")
-            val sequencer = if (properties.getProperty("midi_device") == "Gervill") {
-                /* Get internal synth */
-                val synthesizer = try {
-                    logger().debug("getting synthesizer")
-                    MidiSystem.getSynthesizer()
-                } catch (e: MidiUnavailableException) {
-                    err(
-                        e,
-                        "The internal synthesizer is not available due to resource restrictions, or no synthesizer is installed in the system.",
-                        "Error opening MIDI synthesizer",
-                        onFinish
-                    )
-                    return@launch
-                }
-
-                /* Open synthesizer */
-                try {
-                    logger().debug("opening synthesizer")
-                    synthesizer.open()
-                } catch (e: MidiUnavailableException) {
-                    err(
-                        e,
-                        "The MIDI device cannot be opened due to resource restrictions.",
-                        "Error opening MIDI synthesizer",
-                        onFinish
-                    )
-                    return@launch
-                } catch (e: SecurityException) {
-                    err(
-                        e,
-                        "The MIDI device cannot be opened due to security restrictions.",
-                        "Error opening MIDI synthesizer",
-                        onFinish
-                    )
-                    return@launch
-                }
-
-                /* Get SoundFont */
-                properties.getProperty("soundfont")?.let { sf2 ->
-                    logger().debug("gettting sf2")
-                    getUnconnectedSequencer().also {
-                        try {
-                            logger().debug("connecting receiver")
-                            it.transmitter.receiver = synthesizer.receiver
-                            synthesizer.loadAllInstruments(MidiSystem.getSoundbank(File(sf2)))
-                        } catch (e: InvalidMidiDataException) {
-                            err(e, "The SoundFont file is bad.", "Error loading SoundFont", onFinish)
-                            return@launch
-                        } catch (e: IOException) {
-                            err(e, "Could not load the SoundFont.", "Error loading SoundFont", onFinish)
-                            return@launch
-                        } catch (e: IllegalArgumentException) {
-                            err(e, "midis2jam2 does not support this soundbank.", "Error loading SoundFont", onFinish)
-                            return@launch
-                        }
+            /* Get SoundFont */
+            properties.getProperty("soundfont")?.let { sf2 ->
+                logger().debug("gettting sf2")
+                getUnconnectedSequencer().also {
+                    try {
+                        logger().debug("connecting receiver")
+                        it.transmitter.receiver = synthesizer.receiver
+                        synthesizer.loadAllInstruments(MidiSystem.getSoundbank(File(sf2)))
+                    } catch (e: InvalidMidiDataException) {
+                        err(e, "The SoundFont file is bad.", "Error loading SoundFont", onFinish)
+                        return
+                    } catch (e: IOException) {
+                        err(e, "Could not load the SoundFont.", "Error loading SoundFont", onFinish)
+                        return
+                    } catch (e: IllegalArgumentException) {
+                        err(e, "midis2jam2 does not support this soundbank.", "Error loading SoundFont", onFinish)
+                        return
                     }
-                } ?: let {
-                    logger().debug("no sf2")
-                    loadSequencerJob.join()
-                    connectedSequencer
                 }
-            } else {
+            } ?: let {
+                logger().debug("no sf2")
                 try {
-                    logger().debug("opening midi device")
-                    midiDevice.open()
+                    connectedSequencer = MidiSystem.getSequencer(true)
+                    Execution.logger().info("Loaded internal MIDI sequencer")
                 } catch (e: MidiUnavailableException) {
                     err(
                         e,
-                        "The MIDI device cannot be opened due to resource restrictions.",
-                        "Error opening MIDI synthesizer",
-                        onFinish
+                        "The MIDI sequencer is not available due to resource restrictions, or no sequencer is installed in the system.",
+                        "Error loading MIDI sequencer"
                     )
-                    return@launch
-                } catch (e: SecurityException) {
-                    err(
-                        e,
-                        "The MIDI device cannot be opened due to security restrictions.",
-                        "Error opening MIDI synthesizer",
-                        onFinish
-                    )
-                    return@launch
                 }
-                logger().debug("getting sequencer 2")
-                MidiSystem.getSequencer(false).also {
-                    it.transmitter.receiver = midiDevice.receiver
-                }
-            }.also {
-                try {
-                    logger().debug("opening sequencer")
-                    it.open()
-                } catch (e: MidiUnavailableException) {
-
-                    err(
-                        e,
-                        "The MIDI device cannot be opened due to resource restrictions.",
-                        "Error opening MIDI synthesizer",
-                        onFinish
-                    )
-                    return@launch
-                } catch (e: SecurityException) {
-                    err(
-                        e,
-                        "The MIDI device cannot be opened due to security restrictions.",
-                        "Error opening MIDI synthesizer",
-                        onFinish
-                    )
-                    return@launch
-                }
-                it.sequence = sequence
+                connectedSequencer
             }
-
-            logger().debug("jme3 log setting")
-            /* Hush JME */
-            Logger.getLogger("com.jme3").level = Level.FINEST
-
-            logger().debug("calling onReady")
-            onReady()
-
-            logger().debug("applying graphics")
-            /* Apply graphics configuration */
-            with(getGraphicsSettings()) {
-                stringPropertyNames().forEach {
-                    properties.setProperty(it, this.getProperty(it))
-                }
+        } else {
+            try {
+                logger().debug("opening midi device")
+                midiDevice.open()
+            } catch (e: MidiUnavailableException) {
+                err(
+                    e,
+                    "The MIDI device cannot be opened due to resource restrictions.",
+                    "Error opening MIDI synthesizer",
+                    onFinish
+                )
+                return
+            } catch (e: SecurityException) {
+                err(
+                    e,
+                    "The MIDI device cannot be opened due to security restrictions.",
+                    "Error opening MIDI synthesizer",
+                    onFinish
+                )
+                return
             }
+            logger().debug("getting sequencer 2")
+            MidiSystem.getSequencer(false).also {
+                it.transmitter.receiver = midiDevice.receiver
+            }
+        }.also {
+            try {
+                logger().debug("opening sequencer")
+                it.open()
+            } catch (e: MidiUnavailableException) {
 
-            logger().debug("ready to start execution thread!")
-
-            Thread({
-                M2J2Execution(properties, {
-                    onFinish.invoke()
-                    midiDevice?.close()
-                }, sequencer).execute()
-            }, "midis2jam2 starter").start()
+                err(
+                    e,
+                    "The MIDI device cannot be opened due to resource restrictions.",
+                    "Error opening MIDI synthesizer",
+                    onFinish
+                )
+                return
+            } catch (e: SecurityException) {
+                err(
+                    e,
+                    "The MIDI device cannot be opened due to security restrictions.",
+                    "Error opening MIDI synthesizer",
+                    onFinish
+                )
+                return
+            }
+            it.sequence = sequence
         }
+
+        logger().debug("jme3 log setting")
+        /* Hush JME */
+        Logger.getLogger("com.jme3").level = Level.FINEST
+
+        logger().debug("calling onReady")
+        onReady()
+
+        logger().debug("applying graphics")
+        /* Apply graphics configuration */
+        with(getGraphicsSettings()) {
+            stringPropertyNames().forEach {
+                properties.setProperty(it, this.getProperty(it))
+            }
+        }
+
+        logger().debug("ready to start execution thread!")
+
+        Thread({
+            M2J2Execution(properties, {
+                onFinish.invoke()
+                midiDevice?.close()
+            }, sequencer).execute()
+        }, "midis2jam2 starter").start()
     }
 
     private fun getUnconnectedSequencer() = MidiSystem.getSequencer(false)
