@@ -270,12 +270,10 @@ object Execution {
 
         logger().debug("ready to start execution thread!")
 
-        Thread({
-            M2J2Execution(properties, {
-                onFinish.invoke()
-                midiDevice?.close()
-            }, sequencer).execute()
-        }, "midis2jam2 starter").start()
+        M2J2Execution(properties, {
+            onFinish.invoke()
+            midiDevice?.close()
+        }, sequencer).execute()
     }
 
     private fun getUnconnectedSequencer() = MidiSystem.getSequencer(false)
