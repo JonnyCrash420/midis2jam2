@@ -294,9 +294,9 @@ private val defaultSettings = AppSettings(true).apply {
     isVSync = true
     isResizable = false
     isGammaCorrection = false
-    icons = arrayOf("/ico/icon16.png", "/ico/icon32.png", "/ico/icon128.png", "/ico/icon256.png").map {
-        ImageIO.read(this::class.java.getResource(it))
-    }.toTypedArray()
+//    icons = arrayOf("/ico/icon16.png", "/ico/icon32.png", "/ico/icon128.png", "/ico/icon256.png").map {
+//        ImageIO.read(this::class.java.getResource(it))
+//    }.toTypedArray()
     title = "midis2jam2"
     audioRenderer = null
     centerWindow = true
